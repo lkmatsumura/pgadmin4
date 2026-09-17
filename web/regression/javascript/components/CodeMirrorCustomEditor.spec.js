@@ -11,8 +11,9 @@
 import { withTheme } from '../fake_theme';
 import CodeMirror from 'sources/components/ReactCodeMirror';
 import { syntaxTree } from '@codemirror/language';
+import { handleDrop } from 'sources/components/ReactCodeMirror/components/Editor';
 
-import { render } from '@testing-library/react';
+import { render, waitFor } from '@testing-library/react';
 
 describe('CodeMirrorCustomEditorView', ()=>{
   const ThemedCM = withTheme(CodeMirror);
@@ -318,6 +319,65 @@ describe('CodeMirrorCustomEditorView', ()=>{
     expect(result.value).toBe('SELECT 2;');
     // from may include the preceding newline (trimmed from value)
     expect(result.to).toBe(stmts[1].to);
+  });
+
+  it('replaces editor content when a file is dropped', async ()=>{
+    cmRerender({value: 'select * from old_query;'});
+    const fileContent = 'select * from dropped_file;';
+    const file = new File([fileContent], 'test.sql', { type: 'text/plain' });
+    const event = {
+      dataTransfer: {
+        files: [file],
+        getData: jest.fn().mockReturnValue(''),
+      },
+      preventDefault: jest.fn(),
+      stopPropagation: jest.fn(),
+    };
+
+    expect(handleDrop(event, editor)).toBe(true);
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(event.stopPropagation).toHaveBeenCalled();
+
+    await waitFor(() => {
+      expect(editor.getValue()).toBe(fileContent);
+    });
+  });
+
+  it('inserts tree node text at drop position', ()=>{
+    cmRerender({value: 'select  from t;'});
+    const dropPos = 7;
+    const dropDetails = {
+      text: 'public.actor',
+      cur: { from: 12, to: 12 },
+    };
+    jest.spyOn(editor, 'posAtCoords').mockReturnValue(dropPos);
+    const event = {
+      dataTransfer: {
+        files: [],
+        getData: jest.fn().mockReturnValue(JSON.stringify(dropDetails)),
+      },
+      preventDefault: jest.fn(),
+      stopPropagation: jest.fn(),
+      x: 0,
+      y: 0,
+    };
+
+    handleDrop(event, editor);
+
+    expect(editor.getValue()).toBe('select public.actor from t;');
+  });
+
+  it('returns false for internal text drag so CodeMirror can handle it', ()=>{
+    const event = {
+      dataTransfer: {
+        files: [],
+        getData: jest.fn().mockReturnValue('plain selected text'),
+      },
+      preventDefault: jest.fn(),
+    };
+
+    expect(handleDrop(event, editor)).toBe(false);
+    expect(event.preventDefault).not.toHaveBeenCalled();
   });
 
 });

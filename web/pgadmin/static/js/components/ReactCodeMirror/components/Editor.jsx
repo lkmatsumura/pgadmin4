@@ -58,7 +58,31 @@ import plpgsqlFoldService from '../extensions/plpgsqlFoldService';
 const arrowRightHtml = ReactDOMServer.renderToString(<KeyboardArrowRightRoundedIcon style={{width: '16px', fill: 'currentcolor'}} />);
 const arrowDownHtml = ReactDOMServer.renderToString(<ExpandMoreRoundedIcon style={{width: '16px', fill: 'currentcolor'}} />);
 
-function handleDrop(e, editor) {
+export function handleDrop(e, editor) {
+  const files = e.dataTransfer?.files;
+  if (files && files.length > 0) {
+    /* OS file drop must be handled synchronously so CodeMirror does not
+     * insert the file text at the drop cursor. */
+    if (e.preventDefault) {
+      e.preventDefault();
+    }
+    if (e.stopPropagation) {
+      e.stopPropagation();
+    }
+    if (editor.state.readOnly) {
+      return true;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = reader.result ?? '';
+      editor.setValue(text);
+      checkTrojanSource(text, true);
+      editor.focus();
+    };
+    reader.readAsText(files[0]);
+    return true;
+  }
+
   let dropDetails = null;
   try {
     dropDetails = JSON.parse(e.dataTransfer.getData('text'));
