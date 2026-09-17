@@ -29,7 +29,7 @@ import {
   EditorView,
   keymap,
 } from '@codemirror/view';
-import { EditorState, Compartment } from '@codemirror/state';
+import { EditorState, Compartment, Prec } from '@codemirror/state';
 import { history, defaultKeymap, historyKeymap, indentLess, indentMore, deleteCharBackwardStrict } from '@codemirror/commands';
 import { closeBrackets, autocompletion, closeBracketsKeymap, completionKeymap, acceptCompletion } from '@codemirror/autocomplete';
 import {
@@ -58,11 +58,77 @@ import plpgsqlFoldService from '../extensions/plpgsqlFoldService';
 const arrowRightHtml = ReactDOMServer.renderToString(<KeyboardArrowRightRoundedIcon style={{width: '16px', fill: 'currentcolor'}} />);
 const arrowDownHtml = ReactDOMServer.renderToString(<ExpandMoreRoundedIcon style={{width: '16px', fill: 'currentcolor'}} />);
 
+function hasOsFileDrop(dataTransfer) {
+  if (!dataTransfer) {
+    return false;
+  }
+  if (dataTransfer.files?.length > 0) {
+    return true;
+  }
+  const items = dataTransfer.items;
+  if (items?.length) {
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].kind === 'file') {
+        return true;
+      }
+    }
+  }
+  const types = dataTransfer.types;
+  if (!types) {
+    return false;
+  }
+  if (typeof types.includes === 'function') {
+    return types.includes('Files');
+  }
+  if (typeof types.contains === 'function') {
+    return types.contains('Files');
+  }
+  return Array.from(types).includes('Files');
+}
+
+function getDroppedFile(dataTransfer) {
+  if (dataTransfer.files?.length > 0) {
+    return dataTransfer.files[0];
+  }
+  const items = dataTransfer.items;
+  if (items?.length) {
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].kind === 'file') {
+        return items[i].getAsFile();
+      }
+    }
+  }
+  return null;
+}
+
+function applyDroppedFileText(editor, text) {
+  const value = text ?? '';
+  editor.setValue(value);
+  checkTrojanSource(value, true);
+  editor.focus();
+}
+
+function handleDragOver(e) {
+  if (!hasOsFileDrop(e.dataTransfer)) {
+    return false;
+  }
+  if (e.preventDefault) {
+    e.preventDefault();
+  }
+  try {
+    e.dataTransfer.dropEffect = 'copy';
+  } catch {
+    /* dropEffect is not always writable */
+  }
+  return true;
+}
+
 export function handleDrop(e, editor) {
-  const files = e.dataTransfer?.files;
-  if (files && files.length > 0) {
-    /* OS file drop must be handled synchronously so CodeMirror does not
-     * insert the file text at the drop cursor. */
+  const dataTransfer = e.dataTransfer;
+  /* Windows/Chromium often exposes a dropped .sql file as text/plain (and
+   * types includes Files) with an empty FileList. CodeMirror then inserts
+   * that text at the drop cursor. Treat any OS file drop as a replace. */
+  if (hasOsFileDrop(dataTransfer)) {
     if (e.preventDefault) {
       e.preventDefault();
     }
@@ -72,20 +138,25 @@ export function handleDrop(e, editor) {
     if (editor.state.readOnly) {
       return true;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const text = reader.result ?? '';
-      editor.setValue(text);
-      checkTrojanSource(text, true);
-      editor.focus();
-    };
-    reader.readAsText(files[0]);
+    const file = getDroppedFile(dataTransfer);
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        applyDroppedFileText(editor, reader.result ?? '');
+      };
+      reader.readAsText(file);
+    } else {
+      applyDroppedFileText(
+        editor,
+        dataTransfer.getData('text') || dataTransfer.getData('Text') || ''
+      );
+    }
     return true;
   }
 
   let dropDetails = null;
   try {
-    dropDetails = JSON.parse(e.dataTransfer.getData('text'));
+    dropDetails = JSON.parse(dataTransfer.getData('text'));
 
     /* Stop firefox from redirecting */
 
@@ -107,6 +178,7 @@ export function handleDrop(e, editor) {
   });
 
   editor.focus();
+  return true;
 }
 
 function calcFontSize(fontSize) {
@@ -168,10 +240,11 @@ const defaultExtensions = [
   PgSQL.language.data.of({
     autocomplete: false,
   }),
-  EditorView.domEventHandlers({
+  Prec.highest(EditorView.domEventHandlers({
     drop: handleDrop,
     paste: handlePaste,
-  }),
+    dragover: handleDragOver,
+  })),
   errorMarkerExtn(),
   indentService.of((context, pos) => {
     if(context.state.facet(indentNewLine)) {

@@ -343,6 +343,24 @@ describe('CodeMirrorCustomEditorView', ()=>{
     });
   });
 
+  it('replaces editor content when Files type is present without a FileList', ()=>{
+    cmRerender({value: 'select * from old_query;'});
+    const fileContent = 'select * from dropped_file;';
+    const event = {
+      dataTransfer: {
+        files: [],
+        types: ['Files', 'text/plain'],
+        getData: jest.fn().mockReturnValue(fileContent),
+      },
+      preventDefault: jest.fn(),
+      stopPropagation: jest.fn(),
+    };
+
+    expect(handleDrop(event, editor)).toBe(true);
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(editor.getValue()).toBe(fileContent);
+  });
+
   it('inserts tree node text at drop position', ()=>{
     cmRerender({value: 'select  from t;'});
     const dropPos = 7;
