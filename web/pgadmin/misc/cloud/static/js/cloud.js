@@ -81,6 +81,8 @@ define('pgadmin.misc.cloud', [
       pgAdmin.Browser.docker.default_workspace.openDialog({
         id: panelId,
         title: panelTitle,
+        // Always close after clearing the session; the wizard registers a
+        // closer that does the same for the tab X / Close All path.
         manualClose: true,
         content: (
           <CloudWizard nodeInfo={info} nodeData={d} cloudPanelId={panelId}

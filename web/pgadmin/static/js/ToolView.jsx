@@ -52,6 +52,12 @@ export function getToolTabParams(panelId, toolUrl, formParams, tabParams, restor
       </LayoutIframeTab>
     ),
     closable: true,
+    // Default: LayoutDocker asks a registered closer (or CLOSING) before
+    // removing the tab. Callers that pass manualClose: false close at once
+    // with no prompt — today that is intentional for PSQL, Schema Diff,
+    // Debugger, Search Objects, Grant Wizard, Import/Export Servers and
+    // Ad-hoc Connection. Only tools with confirmable unsaved state should
+    // keep manualClose: true and registerCloser(...).
     manualClose: true,
     ...tabParams,
     cache: false,

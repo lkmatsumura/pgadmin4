@@ -170,7 +170,8 @@ export class LayoutDocker {
     this.layoutObj = null;
     this.eventBus = new EventBus();
     // Closers return 'close' | 'keep'. LayoutDocker then force-closes or
-    // retains; tools no longer call retainTabInCloseQueue themselves.
+    // retains. Tools with manualClose: false skip this path and remove
+    // immediately (no unsaved-state prompt by product policy).
     this._closers = new Map();
   }
 
