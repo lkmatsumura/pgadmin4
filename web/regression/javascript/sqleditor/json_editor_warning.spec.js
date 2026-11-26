@@ -121,11 +121,9 @@ describe('QueryToolDataGrid json_editor_warning', () => {
 
     it('opens the editor and does not close it when the user continues (#9868)', () => {
       renderEditor('x'.repeat(LARGE_JSON_WARNING_LENGTH + 1));
-      // notifier.confirm() fires the cancel callback as well as the OK
-      // callback when the user clicks OK; the guard must keep the editor open.
+      // ModalProvider.confirm closes with 'proceed' on OK, so cancel does not run.
       act(() => {
         confirmArgs.onOk();
-        confirmArgs.onCancel();
       });
       expect(onClose).not.toHaveBeenCalled();
       expect(screen.getByTestId('json-editor')).toBeInTheDocument();

@@ -399,13 +399,30 @@ export function MainToolBar({containerRef, onFilterClick, onManageMacros, onAddT
     || queryToolConnCtx.connectionStatus == CONNECTION_STATUS.TRANSACTION_STATUS_INERROR);
 
   const onExecutionDone = ()=>{
-    eventBus.registerListener(QUERY_TOOL_EVENTS.EXECUTION_END, (success)=>{
+    let settled = false;
+    const listener = (success)=>{
+      if(settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
       if(success) {
         eventBus.fireEvent(QUERY_TOOL_EVENTS.FORCE_CLOSE_PANEL);
       } else {
         queryToolCtx.keepTabInCloseBatch();
       }
-    }, true);
+    };
+    // If COMMIT/ROLLBACK never finishes, release the close batch so the
+    // remaining tabs are not left waiting on this one.
+    const timer = setTimeout(()=>{
+      if(settled) {
+        return;
+      }
+      settled = true;
+      eventBus.deregisterListener(QUERY_TOOL_EVENTS.EXECUTION_END, listener);
+      queryToolCtx.keepTabInCloseBatch();
+    }, 30000);
+    eventBus.registerListener(QUERY_TOOL_EVENTS.EXECUTION_END, listener, true);
   };
   const warnTxnClose = ()=>{
     if(!isInTxn() || !queryToolCtx.preferences?.sqleditor.prompt_commit_transaction) {

@@ -97,7 +97,9 @@ function confirm(title, text, onOkClick, onCancelClick, okLabel = gettext('Yes')
   this.showModal(title, (closeModal) => {
     const onOkClickClose = () => {
       onOkClick?.();
-      closeModal();
+      // 'proceed' skips onClose (= cancel). Without it, Yes would also
+      // run the cancel callback and undo work such as closing a tab.
+      closeModal(undefined, 'proceed');
     };
     return (
       <AlertContent text={text} confirm onOkClick={onOkClickClose} onCancelClick={closeModal} okLabel={okLabel} cancelLabel={cancelLabel} okIcon={okIcon}/>

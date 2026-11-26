@@ -743,7 +743,7 @@ export default function QueryToolComponent({params, pgWindow, pgAdmin, selectedN
             },
             ()=>{
               onCancel?.();
-              qtPanelDocker.retainTabInCloseQueue?.(qtPanelId);
+              qtPanelDocker.retainTabInCloseQueue(qtPanelId);
             },
           );
         }
@@ -1048,7 +1048,7 @@ export default function QueryToolComponent({params, pgWindow, pgAdmin, selectedN
   }, []);
 
   const keepTabInCloseBatch = useCallback(()=>{
-    qtPanelDocker.retainTabInCloseQueue?.(qtPanelId);
+    qtPanelDocker.retainTabInCloseQueue(qtPanelId);
   }, [qtPanelDocker, qtPanelId]);
 
   const queryToolContextValue = React.useMemo(()=>({

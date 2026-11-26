@@ -1,4 +1,5 @@
 import PropTypes from 'prop-types';
+import { useEffect } from 'react';
 import gettext from 'sources/gettext';
 import { LAYOUT_EVENTS } from './helpers/Layout';
 import { styled } from '@mui/material/styles';
@@ -17,12 +18,14 @@ const StyledBox = styled(Box)(({theme}) => ({
 
 export default function ToolErrorView({error, panelId, panelDocker}){
   const { deleteToolData } = useApplicationState();
-  panelDocker.eventBus.registerListener(LAYOUT_EVENTS.CLOSING, (id)=>{
-    if(panelId == id) {
-      panelDocker.close(panelId, true);
-      deleteToolData(panelId);
-    }
-  });
+  useEffect(()=>{
+    return panelDocker.eventBus.registerListener(LAYOUT_EVENTS.CLOSING, (id)=>{
+      if(panelId == id) {
+        panelDocker.close(panelId, true);
+        deleteToolData(panelId);
+      }
+    });
+  }, [panelId, panelDocker, deleteToolData]);
 
   let err_msg = gettext('An error occurred while opening the tool: %s', error ?? '');
   return  (<StyledBox>

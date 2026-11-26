@@ -1249,8 +1249,12 @@ export function ResultSet() {
           eventBus.fireEvent(QUERY_TOOL_EVENTS.WARN_SAVE_TEXT_CLOSE);
         }}
         onSave={async ()=>{
-          await triggerSaveData();
-          eventBus.fireEvent(QUERY_TOOL_EVENTS.WARN_SAVE_TEXT_CLOSE);
+          const saved = await triggerSaveData();
+          if(saved) {
+            eventBus.fireEvent(QUERY_TOOL_EVENTS.WARN_SAVE_TEXT_CLOSE);
+          } else {
+            queryToolCtx.keepTabInCloseBatch();
+          }
         }}
       />
     ), {id: modalId, onClose: ()=>queryToolCtx.keepTabInCloseBatch()});
@@ -1267,7 +1271,7 @@ export function ResultSet() {
 
   const triggerSaveData = useLatestFunc(async ()=>{
     if(!_.size(dataChangeStore.updated) && !_.size(dataChangeStore.added) && !_.size(dataChangeStore.deleted)) {
-      return;
+      return true;
     }
     rsu.current.historyQuerySource = QuerySources.SAVE_DATA;
     setLoaderText(gettext('Saving data...'));
@@ -1322,7 +1326,7 @@ export function ResultSet() {
                                 'still active; previous queries are unaffected.'));
         }
         setLoaderText(null);
-        return;
+        return false;
       }
 
       pageDataOutOfSync.current = true;
@@ -1371,12 +1375,14 @@ export function ResultSet() {
       if(respData.data.transaction_status > CONNECTION_STATUS.TRANSACTION_STATUS_IDLE) {
         pgAdmin.Browser.notifier.info(gettext('Auto-commit is off. You still need to commit changes to the database.'));
       }
+      return true;
     } catch (error) {
       pageDataOutOfSync.current = false;
       eventBus.fireEvent(QUERY_TOOL_EVENTS.HANDLE_API_ERROR, error, {
         checkTransaction: true,
       });
       setLoaderText(null);
+      return false;
     }
   });
 

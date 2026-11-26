@@ -398,6 +398,38 @@ describe('MainToolBar toolbar options restore', () => {
     expect(queryToolCtx.keepTabInCloseBatch).not.toHaveBeenCalled();
     fired.mockRestore();
   });
+
+  it('releases the tab when commit never reports EXECUTION_END', async () => {
+    queryToolCtx.preferences.sqleditor.prompt_commit_transaction = true;
+    queryToolCtx.keepTabInCloseBatch = jest.fn();
+    let dialogContent;
+    queryToolCtx.modal.showModal = jest.fn((_title, content) => {
+      dialogContent = content;
+    });
+    renderToolBar(true, true, CONNECTION_STATUS.TRANSACTION_STATUS_INTRANS);
+
+    act(() => {
+      eventBus.fireEvent(QUERY_TOOL_EVENTS.WARN_TXN_CLOSE);
+    });
+    await waitFor(() => expect(queryToolCtx.modal.showModal).toHaveBeenCalled());
+
+    const Prompt = withTheme(function Prompt() {
+      return dialogContent(()=>{});
+    });
+    const dialog = render(<Prompt />);
+    // Start fake timers before Commit registers the EXECUTION_END timeout.
+    jest.useFakeTimers();
+    await act(async () => {
+      fireDomEvent.click(dialog.container.querySelector('[data-test="commit"]'));
+    });
+
+    expect(queryToolCtx.keepTabInCloseBatch).not.toHaveBeenCalled();
+    await act(async () => {
+      jest.advanceTimersByTime(30000);
+    });
+    expect(queryToolCtx.keepTabInCloseBatch).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
+  });
 });
 
 describe('MainToolBar execute options menu', () => {

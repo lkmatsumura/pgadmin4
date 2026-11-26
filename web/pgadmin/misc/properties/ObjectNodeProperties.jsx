@@ -183,19 +183,14 @@ export default function ObjectNodeProperties({panelId, node, treeNodeInfo, nodeD
     }
     if (warnOnCloseFlag && confirmOnCloseReset) {
       if(isDirty.current) {
-        // Yes closes the dialog, which also runs the cancel callback.
-        let proceeded = false;
         pgAdmin.Browser.notifier.confirm(
           gettext('Warning'),
           gettext('Changes will be lost. Are you sure you want to close the dialog?'),
           function() {
-            proceeded = true;
             onClose(true);
           },
           function() {
-            if(!proceeded) {
-              layoutDocker.retainTabInCloseQueue(panelId);
-            }
+            layoutDocker.retainTabInCloseQueue(panelId);
           }
         );
       } else {

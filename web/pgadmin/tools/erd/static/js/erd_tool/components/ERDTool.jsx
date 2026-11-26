@@ -368,7 +368,7 @@ export default class ERDTool extends React.Component {
       backgroundPosition: '0px 0px',
     });
 
-    this.props.panelDocker.eventBus.registerListener(LAYOUT_EVENTS.CLOSING, (id)=>{
+    this._deregisterClosing = this.props.panelDocker.eventBus.registerListener(LAYOUT_EVENTS.CLOSING, (id)=>{
       if(this.props.panelId == id) {
         this.confirmBeforeClose();
       }
@@ -433,6 +433,10 @@ export default class ERDTool extends React.Component {
     }
   }
 
+  componentWillUnmount() {
+    this._deregisterClosing?.();
+  }
+
   confirmBeforeClose() {
     let bodyObj = this;
     if(this.state.dirty) {
@@ -450,7 +454,7 @@ export default class ERDTool extends React.Component {
         />
       ), {
         id: 'id-erd-close-confirmation',
-        onClose: ()=>this.props.panelDocker.retainTabInCloseQueue?.(this.props.panelId),
+        onClose: ()=>this.props.panelDocker.retainTabInCloseQueue(this.props.panelId),
       });
       return false;
     } else {
@@ -756,11 +760,11 @@ export default class ERDTool extends React.Component {
       }, ()=>{
         if(fileSelected) return;
         this.closeOnSave = false;
-        this.props.panelDocker.retainTabInCloseQueue?.(this.props.panelId);
+        this.props.panelDocker.retainTabInCloseQueue(this.props.panelId);
       }, this.context);
     } else if (closeOnSave) {
       this.closeOnSave = false;
-      this.props.panelDocker.retainTabInCloseQueue?.(this.props.panelId);
+      this.props.panelDocker.retainTabInCloseQueue(this.props.panelId);
     }
   }
 
@@ -787,7 +791,7 @@ export default class ERDTool extends React.Component {
       this.handleAxiosCatch(err);
       if(this.closeOnSave) {
         this.closeOnSave = false;
-        this.props.panelDocker.retainTabInCloseQueue?.(this.props.panelId);
+        this.props.panelDocker.retainTabInCloseQueue(this.props.panelId);
       }
     });
   }
