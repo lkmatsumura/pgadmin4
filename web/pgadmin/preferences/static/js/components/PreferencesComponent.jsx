@@ -35,7 +35,7 @@ import {
   getCollectionValue,
   showResetPrefModal
 } from './PreferencesHelper';
-import { LAYOUT_EVENTS, LayoutDockerContext } from '../../../../static/js/helpers/Layout';
+import { LayoutDockerContext } from '../../../../static/js/helpers/Layout';
 import LeftTree from './LeftTree';
 import RightPreference from './RightPreference';
 
@@ -198,30 +198,23 @@ export default function PreferencesComponent({panelId}) {
   }, []); // Added dependencies
 
   useEffect(()=>{
-    /* Bind the close event and check if user should be warned */
-    const deregister = layoutDocker.eventBus.registerListener(LAYOUT_EVENTS.CLOSING, (id)=>{
-      if(panelId != id) return;
-
+    return layoutDocker.registerCloser(panelId, ()=>new Promise((resolve)=>{
       if(Object.keys(prefChangedData.current).length > 0) {
         pgAdmin.Browser.notifier.confirm(
           gettext('Warning'),
           gettext('Changes will be lost. Are you sure you want to close the preferences?'),
           function() {
-            layoutDocker.close(panelId, true);
-            return true;
+            resolve('close');
           },
           function() {
-            layoutDocker.retainTabInCloseQueue(panelId);
+            resolve('keep');
           }
         );
-        return false; // Prevent closing
+        return;
       }
-      layoutDocker.close(panelId, true);
-    });
-    return ()=>{
-      deregister();
-    };
-  }, []);
+      resolve('close');
+    }));
+  }, [layoutDocker, panelId]);
 
 
   const savePreferences = async () => {

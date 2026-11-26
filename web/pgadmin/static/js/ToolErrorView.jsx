@@ -1,7 +1,6 @@
 import PropTypes from 'prop-types';
 import { useEffect } from 'react';
 import gettext from 'sources/gettext';
-import { LAYOUT_EVENTS } from './helpers/Layout';
 import { styled } from '@mui/material/styles';
 import { FormHelperText, Box } from '@mui/material';
 import { SafeMessage } from './components/SafeMessage';
@@ -19,11 +18,9 @@ const StyledBox = styled(Box)(({theme}) => ({
 export default function ToolErrorView({error, panelId, panelDocker}){
   const { deleteToolData } = useApplicationState();
   useEffect(()=>{
-    return panelDocker.eventBus.registerListener(LAYOUT_EVENTS.CLOSING, (id)=>{
-      if(panelId == id) {
-        panelDocker.close(panelId, true);
-        deleteToolData(panelId);
-      }
+    return panelDocker.registerCloser(panelId, async ()=>{
+      deleteToolData(panelId);
+      return 'close';
     });
   }, [panelId, panelDocker, deleteToolData]);
 

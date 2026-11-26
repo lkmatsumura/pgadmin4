@@ -201,6 +201,8 @@ export default function QueryToolComponent({params, pgWindow, pgAdmin, selectedN
   };
   const isDirtyRef = useRef(false); // usefull when conn change.
   const qtStateRef = useRef(qtState);
+  // Settles the LayoutDocker closer while a tab-close decision is in flight.
+  const closeDecisionRef = useRef(null);
   // The toolbar's check menu options (execute, explain and open file
   // options) for this tab, kept up to date by MainToolBar so that they are
   // saved and restored with the rest of the tab's state.
@@ -516,15 +518,19 @@ export default function QueryToolComponent({params, pgWindow, pgAdmin, selectedN
     });
 
     eventBus.current.registerListener(QUERY_TOOL_EVENTS.FORCE_CLOSE_PANEL, ()=>{
-      forceClose();
+      if(closeDecisionRef.current) {
+        const resolve = closeDecisionRef.current;
+        closeDecisionRef.current = null;
+        resolve('close');
+      } else {
+        forceClose();
+      }
     });
 
-    const onLayoutClosing = (id)=>{
-      if(qtPanelId == id) {
-        eventBus.current.fireEvent(QUERY_TOOL_EVENTS.WARN_SAVE_DATA_CLOSE);
-      }
-    };
-    qtPanelDocker.eventBus.registerListener(LAYOUT_EVENTS.CLOSING, onLayoutClosing);
+    const deregisterCloser = qtPanelDocker.registerCloser(qtPanelId, ()=>new Promise((resolve)=>{
+      closeDecisionRef.current = resolve;
+      eventBus.current.fireEvent(QUERY_TOOL_EVENTS.WARN_SAVE_DATA_CLOSE);
+    }));
 
     const onLayoutActive = _.debounce((currentTabId)=>{
       /* Focus the appropriate panel on visible */
@@ -570,8 +576,8 @@ export default function QueryToolComponent({params, pgWindow, pgAdmin, selectedN
     return ()=>{
       document.removeEventListener('visibilitychange', onVisibilityChange);
       onLayoutActive.cancel();
+      deregisterCloser?.();
       if(qtPanelDocker?.eventBus) {
-        qtPanelDocker.eventBus.deregisterListener(LAYOUT_EVENTS.CLOSING, onLayoutClosing);
         qtPanelDocker.eventBus.deregisterListener(LAYOUT_EVENTS.ACTIVE, onLayoutActive);
       }
     };
@@ -743,7 +749,6 @@ export default function QueryToolComponent({params, pgWindow, pgAdmin, selectedN
             },
             ()=>{
               onCancel?.();
-              qtPanelDocker.retainTabInCloseQueue(qtPanelId);
             },
           );
         }
@@ -1048,7 +1053,13 @@ export default function QueryToolComponent({params, pgWindow, pgAdmin, selectedN
   }, []);
 
   const keepTabInCloseBatch = useCallback(()=>{
-    qtPanelDocker.retainTabInCloseQueue(qtPanelId);
+    if(closeDecisionRef.current) {
+      const resolve = closeDecisionRef.current;
+      closeDecisionRef.current = null;
+      resolve('keep');
+    } else {
+      qtPanelDocker.retainTabInCloseQueue(qtPanelId);
+    }
   }, [qtPanelDocker, qtPanelId]);
 
   const queryToolContextValue = React.useMemo(()=>({

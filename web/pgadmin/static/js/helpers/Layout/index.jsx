@@ -169,6 +169,23 @@ export class LayoutDocker {
 
     this.layoutObj = null;
     this.eventBus = new EventBus();
+    // Closers return 'close' | 'keep'. LayoutDocker then force-closes or
+    // retains; tools no longer call retainTabInCloseQueue themselves.
+    this._closers = new Map();
+  }
+
+  // decide: async () => 'close' | 'keep'. Returns an unregister function.
+  registerCloser(panelId, decide) {
+    this._closers.set(panelId, decide);
+    return ()=>{
+      this.unregisterCloser(panelId, decide);
+    };
+  }
+
+  unregisterCloser(panelId, decide) {
+    if(!decide || this._closers.get(panelId) === decide) {
+      this._closers.delete(panelId);
+    }
   }
 
   close(panelId, force=false) {
@@ -338,7 +355,8 @@ export class LayoutDocker {
 
   // inBatch waits until the tab has been painted, because its iframe is
   // display:none until then. A single close of the already visible tab
-  // asks immediately.
+  // asks immediately. A registered closer owns the decision; otherwise
+  // LAYOUT_EVENTS.CLOSING is fired for legacy listeners.
   _askToClose(panelId, inBatch=false) {
     if(!this.find(panelId)) {
       return;
@@ -354,7 +372,7 @@ export class LayoutDocker {
     if(!alreadyVisible || inBatch) {
       this.eventBus.fireEvent(LAYOUT_EVENTS.ACTIVE, panelId);
     }
-    const fire = ()=>{
+    const fire = async ()=>{
       if(!this.find(panelId)) {
         return;
       }
@@ -364,6 +382,27 @@ export class LayoutDocker {
           return;
         }
         batch.asked = panelId;
+      }
+      const decide = this._closers.get(panelId);
+      if(decide) {
+        let result = 'close';
+        try {
+          result = await decide();
+        } catch {
+          result = 'keep';
+        }
+        if(inBatch) {
+          const batch = this._closeBatch;
+          if(!batch || batch.token !== token || batch.head !== panelId) {
+            return;
+          }
+        }
+        if(result === 'close') {
+          this.close(panelId, true);
+        } else {
+          this.retainTabInCloseQueue(panelId);
+        }
+        return;
       }
       this.eventBus.fireEvent(LAYOUT_EVENTS.CLOSING, panelId);
     };

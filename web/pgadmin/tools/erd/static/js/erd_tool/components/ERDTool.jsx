@@ -31,7 +31,6 @@ import EventBus from '../../../../../../static/js/helpers/EventBus';
 import { ERD_EVENTS } from '../ERDConstants';
 import getApiInstance, { callFetch, parseApiError } from '../../../../../../static/js/api_instance';
 import { openSocket, socketApiGet } from '../../../../../../static/js/socket_instance';
-import { LAYOUT_EVENTS } from '../../../../../../static/js/helpers/Layout';
 import usePreferences from '../../../../../../preferences/static/js/store';
 import pgAdmin from 'sources/pgadmin';
 import { styled } from '@mui/material/styles';
@@ -368,11 +367,10 @@ export default class ERDTool extends React.Component {
       backgroundPosition: '0px 0px',
     });
 
-    this._deregisterClosing = this.props.panelDocker.eventBus.registerListener(LAYOUT_EVENTS.CLOSING, (id)=>{
-      if(this.props.panelId == id) {
-        this.confirmBeforeClose();
-      }
-    });
+    this._deregisterCloser = this.props.panelDocker.registerCloser(
+      this.props.panelId,
+      ()=>this.decideClose(),
+    );
 
     window.addEventListener('unload', ()=>{
       /* Using fetch with keepalive as the browser may
@@ -434,7 +432,38 @@ export default class ERDTool extends React.Component {
   }
 
   componentWillUnmount() {
-    this._deregisterClosing?.();
+    this._deregisterCloser?.();
+  }
+
+  // Resolves a pending LayoutDocker closer, or returns false when close was
+  // started outside the docker (e.g. BeforeUnload).
+  _settleClose(result) {
+    if(!this._closeDecision) {
+      return false;
+    }
+    const resolve = this._closeDecision;
+    this._closeDecision = null;
+    resolve(result);
+    return true;
+  }
+
+  _keepTab() {
+    if(!this._settleClose('keep')) {
+      this.props.panelDocker.retainTabInCloseQueue(this.props.panelId);
+    }
+  }
+
+  _closeTab() {
+    if(!this._settleClose('close')) {
+      this.forceClose();
+    }
+  }
+
+  decideClose() {
+    return new Promise((resolve)=>{
+      this._closeDecision = resolve;
+      this.confirmBeforeClose();
+    });
   }
 
   confirmBeforeClose() {
@@ -446,7 +475,7 @@ export default class ERDTool extends React.Component {
           closeModal={closeModal}
           text={gettext('The diagram has changed. Do you want to save changes?')}
           onDontSave={()=>{
-            this.forceClose();
+            this._closeTab();
           }}
           onSave={()=>{
             bodyObj.onSaveDiagram(false, true);
@@ -454,11 +483,11 @@ export default class ERDTool extends React.Component {
         />
       ), {
         id: 'id-erd-close-confirmation',
-        onClose: ()=>this.props.panelDocker.retainTabInCloseQueue(this.props.panelId),
+        onClose: ()=>this._keepTab(),
       });
       return false;
     } else {
-      this.forceClose();
+      this._closeTab();
     }
   }
 
@@ -760,11 +789,11 @@ export default class ERDTool extends React.Component {
       }, ()=>{
         if(fileSelected) return;
         this.closeOnSave = false;
-        this.props.panelDocker.retainTabInCloseQueue(this.props.panelId);
+        this._keepTab();
       }, this.context);
     } else if (closeOnSave) {
       this.closeOnSave = false;
-      this.props.panelDocker.retainTabInCloseQueue(this.props.panelId);
+      this._keepTab();
     }
   }
 
@@ -784,14 +813,15 @@ export default class ERDTool extends React.Component {
       this.setTitle(fileName);
       this.setLoading(null);
       if(this.closeOnSave) {
-        this.forceClose();
+        this.closeOnSave = false;
+        this._closeTab();
       }
     }).catch((err)=>{
       this.setLoading(null);
       this.handleAxiosCatch(err);
       if(this.closeOnSave) {
         this.closeOnSave = false;
-        this.props.panelDocker.retainTabInCloseQueue(this.props.panelId);
+        this._keepTab();
       }
     });
   }

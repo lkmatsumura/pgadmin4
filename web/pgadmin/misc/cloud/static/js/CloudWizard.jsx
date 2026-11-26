@@ -25,8 +25,6 @@ import { GoogleCredentials, GoogleInstanceDetails, GoogleDatabaseDetails, valida
 import { StarfleetCredentials, StarfleetInstanceDetails, StarfleetDatabaseDetails, validateStarfleetStep1, validateStarfleetStep2, validateStarfleetStep3 } from './starfleet';
 import EventBus from '../../../../static/js/helpers/EventBus';
 import { CLOUD_PROVIDERS, CLOUD_PROVIDERS_LABELS } from './cloud_constants';
-import { LAYOUT_EVENTS } from '../../../../static/js/helpers/Layout';
-
 export const CloudWizardEventsContext = React.createContext();
 
 export default function CloudWizard({ nodeInfo, nodeData, onClose, cloudPanelId}) {
@@ -68,15 +66,18 @@ export default function CloudWizard({ nodeInfo, nodeData, onClose, cloudPanelId}
       setVerificationIntiated(initiated);
     });
 
-    const onWizardClosing = (panelId)=>{
-      if(panelId == cloudPanelId) {
-        onClose();
+    const docker = pgAdmin.Browser.docker.default_workspace;
+    return docker.registerCloser(cloudPanelId, async ()=>{
+      // onClose clears the session and force-closes; LayoutDocker will close.
+      const axiosApi = getApiInstance();
+      let _url = url_for('cloud.clear_cloud_session');
+      try {
+        await axiosApi.post(_url);
+      } catch (error) {
+        pgAdmin.Browser.notifier.errorText(gettext(`Error while clearing cloud wizard data: ${error.response?.data?.errormsg ?? error}`));
       }
-    };
-    pgAdmin.Browser.docker.default_workspace.eventBus.registerListener(LAYOUT_EVENTS.CLOSING, onWizardClosing);
-    return ()=>{
-      pgAdmin.Browser.docker.default_workspace.eventBus.deregisterListener(LAYOUT_EVENTS.CLOSING, onWizardClosing);
-    };
+      return 'close';
+    });
   }, []);
 
   React.useEffect(() => {

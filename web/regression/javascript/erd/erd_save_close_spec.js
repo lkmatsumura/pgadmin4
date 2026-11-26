@@ -12,6 +12,7 @@ describe('ERDTool unnamed save during close', () => {
   const saveDiagram = (closeOnSave, show) => {
     const tool = Object.create(ERDTool.prototype);
     tool.closeOnSave = closeOnSave;
+    tool._closeDecision = null;
     tool.state = {current_file: null};
     tool.diagram = {getNodesData: () => [{id: 1}]};
     tool.saveFile = jest.fn();

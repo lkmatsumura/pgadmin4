@@ -15,7 +15,7 @@ import SchemaView from 'sources/SchemaView';
 import gettext from 'sources/gettext';
 import { generateNodeUrl } from '../../browser/static/js/node_ajax';
 import { usePgAdmin } from '../../static/js/PgAdminProvider';
-import { LAYOUT_EVENTS, LayoutDockerContext } from '../../static/js/helpers/Layout';
+import { LayoutDockerContext } from '../../static/js/helpers/Layout';
 import usePreferences from '../../preferences/static/js/store';
 import PropTypes from 'prop-types';
 import _ from 'lodash';
@@ -40,7 +40,7 @@ export default function ObjectNodeProperties({panelId, node, treeNodeInfo, nodeD
     return urlBase + (isNew ? '' : nodeData._id);
   };
   const isDirty = useRef(false); // useful for warnings
-  let warnOnCloseFlag = true;
+  const warnOnCloseFlag = useRef(true);
   const confirmOnCloseReset = usePreferences().getPreferencesForModule('browser').confirm_on_properties_close;
   let updatedData =  ['table', 'partition'].includes(nodeType) && !_.isEmpty(nodeData.rows_cnt) ? {rows_cnt: nodeData.rows_cnt} : undefined;
 
@@ -119,7 +119,7 @@ export default function ObjectNodeProperties({panelId, node, treeNodeInfo, nodeD
       data: data,
     }).then((res)=>{
       /* Don't warn the user before closing dialog */
-      warnOnCloseFlag = false;
+      warnOnCloseFlag.current = false;
       resolve(res.data);
       onSave?.(res.data);
     }).catch((err)=>{
@@ -176,40 +176,27 @@ export default function ObjectNodeProperties({panelId, node, treeNodeInfo, nodeD
     }
   };
 
-  /* A warning before closing the dialog with unsaved changes, based on preference */
-  const warnBeforeChangesLost = (id)=>{
-    if(panelId != id) {
+  useEffect(()=>{
+    if(formType != 'dialog') {
       return;
     }
-    if (warnOnCloseFlag && confirmOnCloseReset) {
-      if(isDirty.current) {
+    return layoutDocker.registerCloser(panelId, ()=>new Promise((resolve)=>{
+      if (warnOnCloseFlag.current && confirmOnCloseReset && isDirty.current) {
         pgAdmin.Browser.notifier.confirm(
           gettext('Warning'),
           gettext('Changes will be lost. Are you sure you want to close the dialog?'),
           function() {
-            onClose(true);
+            resolve('close');
           },
           function() {
-            layoutDocker.retainTabInCloseQueue(panelId);
+            resolve('keep');
           }
         );
-      } else {
-        onClose(true);
+        return;
       }
-    } else {
-      onClose(true);
-    }
-  };
-
-  useEffect(()=>{
-    if(formType == 'dialog') {
-      /* Bind the close event and check if user should be warned */
-      layoutDocker.eventBus.registerListener(LAYOUT_EVENTS.CLOSING, warnBeforeChangesLost);
-    }
-    return ()=>{
-      layoutDocker.eventBus.deregisterListener(LAYOUT_EVENTS.CLOSING, warnBeforeChangesLost);
-    };
-  }, []);
+      resolve('close');
+    }));
+  }, [formType, layoutDocker, panelId, confirmOnCloseReset, pgAdmin]);
 
   /* All other useful details can go with this object */
   const viewHelperProps = {

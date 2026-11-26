@@ -461,4 +461,34 @@ describe('LayoutDocker sequential close', () => {
     expect(closingCalls(docker, 't3')).toHaveLength(1);
     expect(closingCalls(docker, 't1')).toHaveLength(0);
   });
+
+  it('awaits a registered closer and force-closes on close', async () => {
+    panel.activeId = 't1';
+    const decide = jest.fn().mockResolvedValue('close');
+    docker.registerCloser('t4', decide);
+
+    docker.closeAll('t1');
+    await flushPaint();
+    await Promise.resolve();
+
+    expect(decide).toHaveBeenCalledTimes(1);
+    expect(closingCalls(docker, 't4')).toHaveLength(0);
+    expect(tabIds()).toEqual(['t1', 't2', 't3']);
+    expect(panel.activeId).toBe('t3');
+  });
+
+  it('awaits a registered closer and retains on keep', async () => {
+    panel.activeId = 't1';
+    docker.registerCloser('t4', async ()=>'keep');
+    docker.registerCloser('t3', async ()=>'close');
+
+    docker.closeAll('t1');
+    await flushPaint();
+    await Promise.resolve();
+    await flushPaint();
+    await Promise.resolve();
+
+    expect(tabIds()).toEqual(['t1', 't2', 't4']);
+    expect(closingCalls(docker, 't4')).toHaveLength(0);
+  });
 });
